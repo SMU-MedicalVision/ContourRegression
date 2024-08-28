@@ -1,1 +1,1 @@
-# CCRNetPlus
+# Contour regression
