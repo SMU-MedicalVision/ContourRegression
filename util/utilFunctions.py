@@ -324,18 +324,6 @@ def FillBdryGaps(inBdry):
         outBdry = np.append(outBdry,temp,axis=0)
     return outBdry
 
-def polygon2mask(image_shape, pointslumen):
-    pointslumen = np.around(pointslumen)
-    pointslumen = FillBdryGaps(pointslumen)
-    maskx, masky = np.zeros(image_shape), np.zeros(image_shape)
-    for i in range(int(min(pointslumen[:,0])),min(int(max(pointslumen[:,0])+1),512)):
-        temp = pointslumen[np.where(pointslumen[:,0]==i), 1]
-        maskx[int(np.min(temp)):int(np.max(temp)+1), i] = 1
-    for i in range(int(min(pointslumen[:,1])),min(int(max(pointslumen[:,1])+1),512)):
-        temp = pointslumen[np.where(pointslumen[:,1]==i), 0]
-        masky[i, int(np.min(temp)):int(np.max(temp)+1)] = 1
-    mask = maskx * masky
-    return mask.astype(np.uint8)
 
 def asd(predpoints, gtpoints):
     gt_to_pred = gtpoints.unsqueeze(1)
