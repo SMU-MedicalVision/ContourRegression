@@ -10,24 +10,24 @@ See the requirements.txt to construct the processing environment.
 
 Run
 
-'''
+```
 python train.py
-'''
+```
 
 The input IVUS images are consecutive frames.
 
 ## Evaluation
 
-'''
+```
 python evluation.py
-'''
+```
 
 ## Inference
 
 For any random IVUS images as the model input, run
 
-'''
+```
 python inference.py
-'''
+```
 
 to obtain the lumen and media contours.
