@@ -9,12 +9,20 @@ import numpy as np
 import os
 # import my modeuls
 from util.utilFunctions import outcode2MALU, Evaluation_calc
-from data_perpare.DatasetGen import DatasetGenerator
 from network.EfficientNet import EfficientNet
 from encoding.EncodProcess import decode
 
+def load_image(args):
+    imagedata = np.load(args.img_path)[6:9, :, :]
 
-def run_eval(model, data_loader, device, pca_inverse, pca_mean, sigatureMean):
+    imagedata = imagedata.astype(np.float32)
+    for i in range(3):
+        imagedata[i] -= np.mean(imagedata[i])
+        imagedata[i] /= np.std(imagedata[i])
+
+    return torch.from_numpy(imagedata.copy())
+
+def run_eval(model, img, device, pca_inverse, pca_mean, sigatureMean):
     # switch to evaluate mode
     model.eval()
     print("Running validation...")
@@ -23,32 +31,11 @@ def run_eval(model, data_loader, device, pca_inverse, pca_mean, sigatureMean):
     dice_media, JI_media = [],[]
     hd_lumen, hd_media = [],[]
     with torch.no_grad():
-        for [img, mask, _, _, _] in data_loader:
-            img = img.to(device)
-            outcode = model(img)
-            outcode = decode(outcode, pca_inverse[:128, :], pca_mean, sigatureMean)  #[:512,:]
-            media, lumen = outcode2MALU(outcode)
-            ldice, lJI, mdice, mJI, lhd, mhd = Evaluation_calc(lumen, media, mask)
-            dice_lumen.append(ldice)
-            JI_lumen.append(lJI)
-            hd_lumen.append(lhd)
-            dice_media.append(mdice)
-            JI_media.append(mJI)
-            hd_media.append(mhd)
-    JI_lumen = [i for j in JI_lumen for i in j]
-    JI_media = [i for j in JI_media for i in j]
-    dice_lumen = [i for j in dice_lumen for i in j]
-    dice_media = [i for j in dice_media for i in j]
-    hd_lumen = [i for j in hd_lumen for i in j]
-    hd_media = [i for j in hd_media for i in j]
-    print('MEAN:')
-    print('lumen dice: %.4f, \t media dice: %.4f' % (np.mean(dice_lumen), np.mean(dice_media)))
-    print('lumen AMCD: %.4f, \t media AMCD: %.4f' % (np.mean(JI_lumen), np.mean(JI_media)))
-    print('lumen HD:   %.4f, \t media HD:   %.4f' % (np.mean(hd_lumen), np.mean(hd_media)))
-    print('STD:')
-    print('lumen dice: %.4f, \t media dice: %.4f' % (np.std(dice_lumen), np.std(dice_media)))
-    print('lumen AMCD: %.4f, \t media AMCD: %.4f' % (np.std(JI_lumen), np.std(JI_media)))
-    print('lumen HD:   %.4f, \t media HD:   %.4f' % (np.std(hd_lumen), np.std(hd_media)))
+        img = img.to(device)
+        outcode = model(img)
+        outcode = decode(outcode, pca_inverse[:128, :], pca_mean, sigatureMean)
+        media, lumen = outcode2MALU(outcode)
+    return media, lumen
 
 def main(args):
     # set the running device
@@ -58,18 +45,14 @@ def main(args):
     if args.gpu == '-1' or args.gpu == 'cpu':
         device = torch.device('cpu')
     
-    # make the train&eval&test dataloader
-    testpath = '/home/NeverDie/data/testimg/'
-    testmaskpath = '/home/NeverDie/data/testmask/'
-    datasetTest = DatasetGenerator(testpath, testmaskpath, if_train=False)
-    test_loader = DataLoader(dataset=datasetTest, batch_size=args.batch_size, shuffle=False, 
-                            num_workers=args.num_workers, pin_memory=True)
+    # make the test dataloader
+    img = load_image(args)
     
     # Build the network
     model = EfficientNet.from_name('efficientnet-b0')
     model = nn.DataParallel(model)  # if multiGPU
     
-    # Resume fine-tuning if we find a saved model.
+    # load the model
     checkpoint = torch.load(args.modeldir, map_location="cpu")
     step = checkpoint["step"]
     model.load_state_dict(checkpoint["model"])
@@ -77,13 +60,13 @@ def main(args):
     model = model.to(device)
     
     # perpare the decoding matfile
-    cwdir = '/home/NeverDie/code/HMCCRNet/encoding/'
+    cwdir = './encoding/'
     pca_inverse = np.load(os.path.join(cwdir,'pca_inverse.npy'))
     pca_mean = np.load(os.path.join(cwdir,'pca_mean.npy'))
     sigatureMean = np.load(os.path.join(cwdir, 'sigatureMean.npy'))
 
-    run_eval(model, test_loader, device, pca_inverse, pca_mean, sigatureMean)
-    print('Finish evaluating.')
+    media, lumen = run_eval(model, img, device, pca_inverse, pca_mean, sigatureMean)
+    print('Finish inferencing.')
 
 
 if __name__ == "__main__":
@@ -92,14 +75,12 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
 
-    parser.add_argument("--gpu", type=str, default='4', help="gpu id")
-    parser.add_argument("--batch_size", type=int, dest="batch_size", 
-                        default=32, help="batch_size")
-    parser.add_argument("--num_workers", type=int, dest="num_workers",
-                        default=2, help="num_workers")
+    parser.add_argument("--gpu", type=str, default='0', help="gpu id")
+    parser.add_argument("--img_path", type=str, dest="img_path", 
+                        default=None,
+                        help="img path")
     parser.add_argument("--modeldir", type=str, dest="modeldir", 
-                        default="/home/NeverDie/results/ac-3-1/198.pth.tar",
+                        default=None,
                         help="models folder")
 
     main(parser.parse_args())
-# nohup /home/NeverDie/python /home/NeverDie/code/HMCCRNet/test.py > /home/NeverDie/results/ac-3-1/result-126.log 2>&1 &
