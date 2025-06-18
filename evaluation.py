@@ -26,7 +26,7 @@ def run_eval(model, data_loader, device, pca_inverse, pca_mean, sigatureMean):
         for [img, mask, _, _, _] in data_loader:
             img = img.to(device)
             outcode = model(img)
-            outcode = decode(outcode, pca_inverse[:128, :], pca_mean, sigatureMean)  #[:512,:]
+            outcode = decode(outcode, pca_inverse[:128, :], pca_mean, sigatureMean)
             media, lumen = outcode2MALU(outcode)
             ldice, lJI, mdice, mJI, lhd, mhd = Evaluation_calc(lumen, media, mask)
             dice_lumen.append(ldice)
@@ -58,9 +58,9 @@ def main(args):
     if args.gpu == '-1' or args.gpu == 'cpu':
         device = torch.device('cpu')
     
-    # make the train&eval&test dataloader
-    testpath = '/home/NeverDie/data/testimg/'
-    testmaskpath = '/home/NeverDie/data/testmask/'
+    # make the test dataloader
+    testpath = './testimg/'
+    testmaskpath = './testmask/'
     datasetTest = DatasetGenerator(testpath, testmaskpath, if_train=False)
     test_loader = DataLoader(dataset=datasetTest, batch_size=args.batch_size, shuffle=False, 
                             num_workers=args.num_workers, pin_memory=True)
@@ -69,7 +69,7 @@ def main(args):
     model = EfficientNet.from_name('efficientnet-b0')
     model = nn.DataParallel(model)  # if multiGPU
     
-    # Resume fine-tuning if we find a saved model.
+    # load the model
     checkpoint = torch.load(args.modeldir, map_location="cpu")
     step = checkpoint["step"]
     model.load_state_dict(checkpoint["model"])
@@ -77,7 +77,7 @@ def main(args):
     model = model.to(device)
     
     # perpare the decoding matfile
-    cwdir = '/home/NeverDie/code/HMCCRNet/encoding/'
+    cwdir = './encoding/'
     pca_inverse = np.load(os.path.join(cwdir,'pca_inverse.npy'))
     pca_mean = np.load(os.path.join(cwdir,'pca_mean.npy'))
     sigatureMean = np.load(os.path.join(cwdir, 'sigatureMean.npy'))
